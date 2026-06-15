@@ -19,6 +19,10 @@ const selectDataset = (dataset: any) => {
 };
 
 const handleImportData = () => {
+  if (!categoryStore.currentCategory) {
+    ElMessage.warning("请先选择一个分类");
+    return;
+  }
   emitter.emit("open-import-data-dialog");
 };
 

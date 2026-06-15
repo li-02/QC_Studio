@@ -136,6 +136,7 @@ const dsDatasetName = ref("");
 const dsImporting = ref(false);
 
 // ── 文件计算属性 ──
+const hasSelectedCategory = computed(() => Boolean(categoryStore.currentCategory));
 const canClose = computed(() => !isImporting.value && !dbImporting.value);
 const canGoPrev = computed(() => currentStep.value > 0 && !isImporting.value);
 const canGoNext = computed(
@@ -149,10 +150,18 @@ const canImport = computed(() => {
   return (
     currentStep.value === 1 &&
     !isImporting.value &&
-    Boolean(categoryStore.currentCategory) &&
+    hasSelectedCategory.value &&
     fileEntries.value.length > 0 &&
     fileEntries.value.every(e => e.name.trim().length > 0)
   );
+});
+const fileImportDisabledReason = computed(() => {
+  if (isImporting.value) return "";
+  if (!hasSelectedCategory.value) return "请先选择一个分类后再导入";
+  if (fileEntries.value.length === 0) return "请先添加至少一个文件";
+  if (fileEntries.value.some(entry => entry.name.trim().length === 0)) return "请为每个文件填写数据集名称";
+  if (currentStep.value !== 1) return "请先完成文件步骤";
+  return "";
 });
 const completedCount = computed(() => progressItems.value.filter(p => p.status === "completed").length);
 const failedCount = computed(() => progressItems.value.filter(p => p.status === "failed").length);
@@ -192,15 +201,31 @@ const dbCanImport = computed(
   () =>
     dbCurrentStep.value === 2 &&
     !dbImporting.value &&
-    !!categoryStore.currentCategory &&
+    hasSelectedCategory.value &&
     !!dbDatasetName.value.trim() &&
     dbConnStatus.value === "success" &&
     dbSelectedColumnCount.value > 0 &&
     !!dbUnifiedTimeRange.value
 );
+const dbImportDisabledReason = computed(() => {
+  if (dbImporting.value) return "";
+  if (!hasSelectedCategory.value) return "请先选择一个分类后再导入";
+  if (dbCurrentStep.value !== 2) return "请先完成数据库导入配置";
+  if (!dbDatasetName.value.trim()) return "请填写数据集名称";
+  if (dbConnStatus.value !== "success") return "请先完成数据库连接";
+  if (dbSelectedColumnCount.value <= 0) return "请至少选择一列数据";
+  if (!dbUnifiedTimeRange.value) return "请设置统一起止时间";
+  return "";
+});
 const dbCanTestConn = computed(
   () => !!dbConfig.value.host.trim() && !!dbConfig.value.user.trim() && !!dbConfig.value.database.trim()
 );
+
+const ensureCategorySelected = () => {
+  if (hasSelectedCategory.value) return true;
+  ElMessage.warning("请先选择一个分类");
+  return false;
+};
 
 const dbConnectionTitle = (profile: DatabaseConnectionProfile) => {
   return profile.profileName || `${profile.user}@${profile.host}:${profile.port}/${profile.database}`;
@@ -433,7 +458,7 @@ const progressListener = ((_event: any, progress: ImportTaskProgress) => {
 
 // ── 文件批量导入 ──
 const submitImport = async () => {
-  if (!canImport.value || !categoryStore.currentCategory) return;
+  if (!ensureCategorySelected() || !canImport.value || !categoryStore.currentCategory) return;
   isImporting.value = true;
   importFinished.value = false;
   progressItems.value = [];
@@ -691,7 +716,7 @@ const dbProgressListener = ((_event: any, progress: any) => {
 
 // ── MySQL 导入 ──
 const submitMysqlImport = async () => {
-  if (!dbCanImport.value || !categoryStore.currentCategory) return;
+  if (!ensureCategorySelected() || !dbCanImport.value || !categoryStore.currentCategory) return;
   dbImporting.value = true;
   dbImportFinished.value = false;
   dbImportStatus.value = "";
@@ -728,6 +753,7 @@ const submitMysqlImport = async () => {
 
 // ── 对话框控制 ──
 const open = async () => {
+  if (!ensureCategorySelected()) return;
   dialogVisible.value = true;
   void loadDbConnectionProfiles();
   const customTypes = await settingsStore.getCustomMissingTypes();
@@ -1331,6 +1357,16 @@ defineExpose({ open, close });
 
     <template #footer>
       <div class="dialog-footer">
+        <span
+          v-if="importSource === 'file' && !isImporting && !importFinished && fileImportDisabledReason"
+          class="dialog-footer-hint">
+          {{ fileImportDisabledReason }}
+        </span>
+        <span
+          v-if="importSource === 'mysql' && !dbImporting && !dbImportFinished && dbImportDisabledReason"
+          class="dialog-footer-hint">
+          {{ dbImportDisabledReason }}
+        </span>
         <!-- 关闭 / 取消按钮 -->
         <el-button class="btn-secondary" size="large" :disabled="!canClose" @click="close">
           {{ importFinished || dbImportFinished ? "关闭" : "取消" }}
@@ -1951,8 +1987,21 @@ defineExpose({ open, close });
 /* ── 底部按钮 ── */
 .dialog-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
+}
+.dialog-footer-hint {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: #f59e0b;
+  text-align: left;
+}
+.dialog-footer .el-button:first-of-type {
+  margin-left: auto;
+}
+.dialog-footer .el-button {
+  flex-shrink: 0;
 }
 .dialog-footer .el-button {
   height: 40px;
