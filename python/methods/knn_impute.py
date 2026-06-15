@@ -95,6 +95,8 @@ def run(args: argparse.Namespace) -> None:
 
     # 只回写目标列中原本缺失的值
     df_out = df.copy()
+    # 确保目标列是数值类型，避免回写 float 到 string 列时报错
+    df_out[args.target] = pd.to_numeric(df_out[args.target], errors="coerce")
     imputed_count = 0
     for idx in df_out.index[missing_mask]:
         val = df_imputed.at[idx, args.target]

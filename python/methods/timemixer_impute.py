@@ -217,6 +217,8 @@ def run(args: argparse.Namespace) -> None:
 
     decimals = get_decimal_places(df[args.target])
     df_out = df.copy()
+    # 确保目标列是数值类型，避免回写 float 到 string 列时报错
+    df_out[args.target] = pd.to_numeric(df_out[args.target], errors="coerce")
     imputed_count = 0
     for row_idx in np.where(missing_mask)[0]:
         value = reconstructed_target[row_idx]

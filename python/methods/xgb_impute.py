@@ -174,6 +174,9 @@ def run(args: argparse.Namespace) -> None:
 
     df_out = df.copy()
 
+    # 确保目标列是数值类型，避免回写 float 到 string 列时报错
+    df_out[args.target] = pd.to_numeric(df_out[args.target], errors="coerce")
+
     # 只对有完整特征的缺失行执行预测
     X_missing = X_all[missing_mask]
     # 将特征列中的 NaN 用列均值填充（保持与训练时一致的简单策略）
